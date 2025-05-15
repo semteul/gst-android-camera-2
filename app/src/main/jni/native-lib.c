@@ -8,6 +8,72 @@
 #include <gst/video/video.h>
 #include <pthread.h>
 
+// ------------------------------------
+#define PACKAGE "gstvideotestsrcwrapper"
+
+#define GST_TYPE_VIDEOTESTSRCWRAPPER (gst_videotestsrc_wrapper_get_type())
+G_DECLARE_FINAL_TYPE(GstVideoTestSrcWrapper, gst_videotestsrc_wrapper, GST, VIDEOTESTSRCWRAPPER, GstBin)
+
+struct _GstVideoTestSrcWrapper {
+    GstBin parent;
+    GstElement *videotestsrc;
+    GstElement *textoverlay;
+};
+
+G_DEFINE_TYPE(GstVideoTestSrcWrapper, gst_videotestsrc_wrapper, GST_TYPE_BIN)
+
+static void gst_videotestsrc_wrapper_init(GstVideoTestSrcWrapper *self) {
+    // 요소 생성
+    self->videotestsrc = gst_element_factory_make("videotestsrc", "src");
+    self->textoverlay = gst_element_factory_make("textoverlay", "overlay");
+
+    if (!self->videotestsrc || !self->textoverlay) {
+        g_error("Failed to create videotestsrc or textoverlay");
+        return;
+    }
+
+    // 텍스트 오버레이 설정
+    g_object_set(self->textoverlay,
+                 "text", "I wanna be ahc2src,\n but I'm too young....",
+                 "font-desc", "Sans, 25",
+                 NULL);
+
+    // bin에 추가 및 연결
+    gst_bin_add_many(GST_BIN(self), self->videotestsrc, self->textoverlay, NULL);
+    if (!gst_element_link(self->videotestsrc, self->textoverlay)) {
+        g_error("Failed to link videotestsrc to textoverlay");
+        return;
+    }
+
+    // ghost pad 생성
+    GstPad *srcpad = gst_element_get_static_pad(self->textoverlay, "src");
+    GstPad *ghost = gst_ghost_pad_new("src", srcpad);
+    gst_pad_set_active(ghost, TRUE);
+    gst_element_add_pad(GST_ELEMENT(self), ghost);
+    gst_object_unref(srcpad);
+}
+
+static void gst_videotestsrc_wrapper_class_init(GstVideoTestSrcWrapperClass *klass) {}
+
+static gboolean plugin_init(GstPlugin *plugin) {
+    return gst_element_register(plugin, "videotestsrcwrapper", GST_RANK_NONE, GST_TYPE_VIDEOTESTSRCWRAPPER);
+}
+
+GST_PLUGIN_DEFINE(
+        GST_VERSION_MAJOR,
+        GST_VERSION_MINOR,
+        videotestsrcwrapper,
+        "Custom videotestsrc + textoverlay wrapper",
+        plugin_init,
+        "1.0",
+        "LGPL",
+        "custom",
+        "https://example.org"
+)
+
+// ---------------------------------------- end plugin
+
+
 GST_DEBUG_CATEGORY_STATIC (debug_category);
 #define GST_CAT_DEFAULT debug_category
 
@@ -172,6 +238,10 @@ app_function (void *userdata)
     GSource *bus_source;
     GError *error = NULL;
 
+    GST_PLUGIN_STATIC_DECLARE(videotestsrcwrapper);
+
+    GST_PLUGIN_STATIC_REGISTER(videotestsrcwrapper);
+
     GST_DEBUG ("Creating pipeline in CustomData at %p", data);
 
     /* Create our own GLib Main Context and make it the default one */
@@ -180,7 +250,7 @@ app_function (void *userdata)
 
     /* Build pipeline */
     data->pipeline =
-            gst_parse_launch ("videotestsrc ! warptv ! videoconvert ! autovideosink",
+            gst_parse_launch ("videotestsrcwrapper ! warptv ! videoconvert ! autovideosink",
                               &error);
     if (error) {
         gchar *message =
