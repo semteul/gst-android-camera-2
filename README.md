@@ -1,7 +1,8 @@
-# Gstreamer for Android Tutorial
+# Gstreamer for Android With custom plugin
 
 * Android Studio Compatible
 * Update gradle
+* Simple static plugin
 
 # prerequisites
 * Latest version of SDK
